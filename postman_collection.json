@@ -1,0 +1,219 @@
+{
+  "info": {
+    "name": "ERP + CRM Portal API",
+    "description": "Mini ERP + CRM Operations Portal. Set {{baseUrl}} (e.g. http://localhost:5000 or your Render URL). Run 'Login' first - the token is saved automatically to {{token}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "token", "value": "" }
+  ],
+  "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (Admin)",
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["const d = pm.response.json();", "if (d.token) pm.collectionVariables.set('token', d.token);"], "type": "text/javascript" }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@erp.com\",\n  \"password\": \"Password@123\"\n}" }
+          }
+        },
+        {
+          "name": "Login (Sales)",
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["const d = pm.response.json();", "if (d.token) pm.collectionVariables.set('token', d.token);"], "type": "text/javascript" }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"sales@erp.com\",\n  \"password\": \"Password@123\"\n}" }
+          }
+        },
+        {
+          "name": "Login (Warehouse)",
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["const d = pm.response.json();", "if (d.token) pm.collectionVariables.set('token', d.token);"], "type": "text/javascript" }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"warehouse@erp.com\",\n  \"password\": \"Password@123\"\n}" }
+          }
+        },
+        {
+          "name": "Login (Accounts)",
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["const d = pm.response.json();", "if (d.token) pm.collectionVariables.set('token', d.token);"], "type": "text/javascript" }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"accounts@erp.com\",\n  \"password\": \"Password@123\"\n}" }
+          }
+        },
+        { "name": "Me", "request": { "method": "GET", "url": "{{baseUrl}}/auth/me" } }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "List (search + filter + pagination)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/customers?search=&status=&type=&page=1&limit=10",
+              "host": ["{{baseUrl}}"], "path": ["customers"],
+              "query": [
+                { "key": "search", "value": "" }, { "key": "status", "value": "" },
+                { "key": "type", "value": "" }, { "key": "page", "value": "1" }, { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        { "name": "Detail (with follow-ups)", "request": { "method": "GET", "url": "{{baseUrl}}/customers/1" } },
+        {
+          "name": "Create (SALES/ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/customers",
+            "body": { "mode": "raw", "raw": "{\n  \"customer_name\": \"New Customer\",\n  \"mobile\": \"9123456789\",\n  \"email\": \"new@example.com\",\n  \"business_name\": \"New Traders\",\n  \"gst_number\": \"\",\n  \"customer_type\": \"WHOLESALE\",\n  \"address\": \"Agartala, Tripura\",\n  \"status\": \"LEAD\",\n  \"follow_up_date\": \"2026-08-10\",\n  \"notes\": \"Met at trade fair\"\n}" }
+          }
+        },
+        {
+          "name": "Update (SALES/ADMIN)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/customers/1",
+            "body": { "mode": "raw", "raw": "{\n  \"customer_name\": \"Rajesh Kumar\",\n  \"mobile\": \"9876543210\",\n  \"customer_type\": \"WHOLESALE\",\n  \"status\": \"ACTIVE\"\n}" }
+          }
+        },
+        {
+          "name": "Add follow-up note (SALES/ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/customers/1/followups",
+            "body": { "mode": "raw", "raw": "{\n  \"note\": \"Called customer - interested in bulk rice order\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products & Stock",
+      "item": [
+        {
+          "name": "List (search + lowStock + pagination)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products?search=&lowStock=&page=1&limit=10",
+              "host": ["{{baseUrl}}"], "path": ["products"],
+              "query": [
+                { "key": "search", "value": "" }, { "key": "lowStock", "value": "" },
+                { "key": "page", "value": "1" }, { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        { "name": "Detail (with movement log)", "request": { "method": "GET", "url": "{{baseUrl}}/products/1" } },
+        {
+          "name": "Create (WAREHOUSE/ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/products",
+            "body": { "mode": "raw", "raw": "{\n  \"product_name\": \"Tea Leaves 5kg\",\n  \"sku\": \"TEA-05\",\n  \"category\": \"Beverages\",\n  \"unit_price\": 950,\n  \"current_stock\": 40,\n  \"min_stock_alert\": 10,\n  \"location\": \"Warehouse A - Rack 4\"\n}" }
+          }
+        },
+        {
+          "name": "Update (WAREHOUSE/ADMIN)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/products/1",
+            "body": { "mode": "raw", "raw": "{\n  \"product_name\": \"Basmati Rice 25kg\",\n  \"sku\": \"RICE-25\",\n  \"category\": \"Grains\",\n  \"unit_price\": 1499,\n  \"min_stock_alert\": 25,\n  \"location\": \"Warehouse A - Rack 1\"\n}" }
+          }
+        },
+        {
+          "name": "Stock movement IN/OUT (WAREHOUSE/ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/products/movements",
+            "body": { "mode": "raw", "raw": "{\n  \"product_id\": 1,\n  \"quantity\": 50,\n  \"movement_type\": \"IN\",\n  \"reason\": \"Purchase order received\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sales Challans",
+      "item": [
+        {
+          "name": "List (search + status + pagination)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/challans?status=&search=&page=1&limit=10",
+              "host": ["{{baseUrl}}"], "path": ["challans"],
+              "query": [
+                { "key": "status", "value": "" }, { "key": "search", "value": "" },
+                { "key": "page", "value": "1" }, { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        { "name": "Detail (snapshot items)", "request": { "method": "GET", "url": "{{baseUrl}}/challans/1" } },
+        {
+          "name": "Create DRAFT (SALES/ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/challans",
+            "body": { "mode": "raw", "raw": "{\n  \"customer_id\": 1,\n  \"status\": \"DRAFT\",\n  \"items\": [\n    { \"product_id\": 1, \"quantity\": 10 },\n    { \"product_id\": 2, \"quantity\": 5 }\n  ]\n}" }
+          }
+        },
+        {
+          "name": "Create CONFIRMED (reduces stock)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/challans",
+            "body": { "mode": "raw", "raw": "{\n  \"customer_id\": 1,\n  \"status\": \"CONFIRMED\",\n  \"items\": [\n    { \"product_id\": 1, \"quantity\": 2 }\n  ]\n}" }
+          }
+        },
+        {
+          "name": "Confirm / Cancel draft (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/challans/1/status",
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"CONFIRMED\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        { "name": "Summary", "request": { "method": "GET", "url": "{{baseUrl}}/dashboard/summary" } }
+      ]
+    }
+  ]
+}
