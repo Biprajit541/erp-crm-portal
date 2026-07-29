@@ -14,6 +14,20 @@ export default function ChallanDetail() {
   const [c, setC] = useState<Challan | null>(null);
   const [error, setError] = useState("");
 
+  const downloadPdf = async () => {
+    try {
+      const res = await api.get(`/challans/${id}/pdf`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${c?.challan_number || "challan"}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setError("Could not download PDF");
+    }
+  };
+
   useEffect(() => {
     api.get(`/challans/${id}`).then((r) => setC(r.data)).catch((e) => setError(errMsg(e)));
   }, [id]);
@@ -25,8 +39,12 @@ export default function ChallanDetail() {
     <div className="stack">
       <div className="page-head">
         <h1>{c.challan_number}</h1>
-        <Link className="btn secondary" to="/challans">Back to list</Link>
+        <div className="row">
+          <button className="btn" onClick={downloadPdf}>Download PDF</button>
+          <Link className="btn secondary" to="/challans">Back to list</Link>
+        </div>
       </div>
+      {error && <div className="error-box">{error}</div>}
       <div className="card">
         <div className="form-grid">
           <div><label>Customer</label>{c.customer_name}{c.business_name ? ` (${c.business_name})` : ""}</div>

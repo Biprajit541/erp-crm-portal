@@ -2,6 +2,7 @@ import { Router } from "express";
 import { PoolClient } from "pg";
 import { pool, query } from "../db";
 import { challanSchema } from "../schemas";
+import { buildInvoicePdf } from "../utils/invoicePdf";
 import { authenticate, requireRole } from "../middleware/auth";
 import { HttpError } from "../middleware/errorHandler";
 
@@ -176,6 +177,31 @@ router.patch("/:id/status", requireRole("SALES"), async (req, res, next) => {
     next(e);
   } finally {
     client.release();
+  }
+});
+
+/** GET /challans/:id/pdf - download the challan as a PDF invoice */
+router.get("/:id/pdf", async (req, res, next) => {
+  try {
+    const c = await query(
+      `SELECT c.*, cu.customer_name, cu.mobile, cu.business_name, u.name AS created_by_name
+       FROM challans c
+       JOIN customers cu ON cu.id = c.customer_id
+       LEFT JOIN users u ON u.id = c.created_by
+       WHERE c.id = $1`,
+      [req.params.id]
+    );
+    if (!c.rows[0]) throw new HttpError(404, "Challan not found");
+    const items = await query("SELECT * FROM challan_items WHERE challan_id = $1 ORDER BY id", [req.params.id]);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${c.rows[0].challan_number}.pdf"`
+    );
+    buildInvoicePdf({ ...c.rows[0], items: items.rows }, res);
+  } catch (e) {
+    next(e);
   }
 });
 
