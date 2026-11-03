@@ -9,8 +9,6 @@ A small ERP/CRM system for a wholesale/distribution company, covering customers 
 - **Interactive API docs (Swagger):** https://erp-crm-portal-va0y.onrender.com/docs
 - **Database:** Supabase (PostgreSQL)
 
-> Replace `YOUR-API` above with your actual Render service URL before submitting.
-
 ## Tech stack
 
 | Layer     | Technology |
