@@ -1,0 +1,51 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudFormationForSam",
+      "Effect": "Allow",
+      "Action": "cloudformation:*",
+      "Resource": [
+        "arn:aws:cloudformation:ap-southeast-2:<ACCOUNT_ID>:stack/erp-crm-api/*",
+        "arn:aws:cloudformation:ap-southeast-2:<ACCOUNT_ID>:stack/aws-sam-cli-managed-default/*",
+        "arn:aws:cloudformation:ap-southeast-2:aws:transform/Serverless-2016-10-31"
+      ]
+    },
+    {
+      "Sid": "CloudFormationRead",
+      "Effect": "Allow",
+      "Action": ["cloudformation:ValidateTemplate", "cloudformation:ListStacks", "cloudformation:GetTemplateSummary"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SamArtifactBucket",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": ["arn:aws:s3:::aws-sam-cli-managed-default-*", "arn:aws:s3:::aws-sam-cli-managed-default-*/*"]
+    },
+    {
+      "Sid": "LambdaFunction",
+      "Effect": "Allow",
+      "Action": "lambda:*",
+      "Resource": "arn:aws:lambda:ap-southeast-2:<ACCOUNT_ID>:function:erp-crm-api-*"
+    },
+    {
+      "Sid": "HttpApi",
+      "Effect": "Allow",
+      "Action": ["apigateway:GET", "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE", "apigateway:TagResource", "apigateway:UntagResource"],
+      "Resource": "arn:aws:apigateway:ap-southeast-2::/*"
+    },
+    {
+      "Sid": "Logs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy", "logs:DescribeLogGroups", "logs:TagResource", "logs:TagLogGroup", "logs:ListTagsForResource"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "LambdaExecutionRole",
+      "Effect": "Allow",
+      "Action": ["iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:PassRole", "iam:TagRole", "iam:UntagRole", "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:GetRolePolicy", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies"],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/erp-crm-api-*"
+    }
+  ]
+}

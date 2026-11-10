@@ -19,14 +19,20 @@ async function nextChallanNumber(client: PoolClient): Promise<string> {
 
 /**
  * Confirms a challan inside an open transaction:
- * - locks product rows (FOR UPDATE) to prevent race conditions
+ * - locks product rows (FOR NO KEY UPDATE) to prevent race conditions.
+ *   NO KEY UPDATE, not FOR UPDATE: inserting challan_items takes a key-share lock
+ *   on the product (foreign key check), and FOR UPDATE conflicts with that, so two
+ *   concurrent challans for the same product deadlocked. NO KEY UPDATE still makes
+ *   stock updates wait for each other, but doesn't conflict with foreign keys.
+ * - locks products in id order, so challans with the same products in a
+ *   different order can't deadlock either
  * - validates stock never goes negative (400 error if insufficient)
  * - reduces stock and writes OUT movements
  */
 async function confirmChallanStock(client: PoolClient, challanId: number, userId: number) {
-  const items = await client.query("SELECT * FROM challan_items WHERE challan_id = $1", [challanId]);
+  const items = await client.query("SELECT * FROM challan_items WHERE challan_id = $1 ORDER BY product_id", [challanId]);
   for (const item of items.rows) {
-    const p = await client.query("SELECT * FROM products WHERE id = $1 FOR UPDATE", [item.product_id]);
+    const p = await client.query("SELECT * FROM products WHERE id = $1 FOR NO KEY UPDATE", [item.product_id]);
     if (!p.rows[0]) throw new HttpError(400, `Product ${item.product_name} no longer exists`);
     if (p.rows[0].current_stock < item.quantity) {
       throw new HttpError(

@@ -78,7 +78,7 @@ export default function CustomerDetail() {
           {c.followups.map((f) => (
             <div key={f.id} style={{ borderLeft: "3px solid var(--accent)", paddingLeft: 12 }}>
               <div>{f.note}</div>
-              <div className="muted">{f.created_by_name || "Unknown"} · {new Date(f.created_at).toLocaleString()}</div>
+              <div className="muted">{f.created_by_name || (f.note.startsWith("[Amazon Connect") ? "Amazon Connect (IVR)" : "Unknown")} ·{new Date(f.created_at).toLocaleString()}</div>
             </div>
           ))}
           {c.followups.length === 0 && <p className="muted">No follow-up notes yet.</p>}

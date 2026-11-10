@@ -1,0 +1,107 @@
+# CI/CD for the backend API on AWS Lambda + API Gateway (AWS SAM).
+#
+# - Every pull request and push: install, type-check, build, validate the SAM template.
+# - Push to main (backend changes) or a manual run: build and deploy with SAM,
+#   then call /health on the deployed API to confirm it is up.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   AWS_DEPLOY_ROLE_ARN  IAM role GitHub assumes via OIDC (recommended)
+#     - or, if you cannot create an OIDC role -
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY   access keys of a deploy-only IAM user
+#   DATABASE_URL         Supabase transaction pooler URL (port 6543)
+#   JWT_SECRET           long random string (no spaces)
+#   CORS_ORIGIN          e.g. https://erp-crm-portal-umber.vercel.app
+#   CONNECT_API_KEY      optional, for the contact-center endpoints
+
+name: Backend - AWS Lambda
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend-aws.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend-aws.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # lets GitHub request an OIDC token for AWS (no long-lived keys)
+
+concurrency:
+  group: backend-aws-${{ github.ref }}
+  cancel-in-progress: false # never cancel a deployment half-way
+
+env:
+  AWS_REGION: ap-southeast-2
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  check:
+    name: Type-check, build, validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+      - run: sam validate --lint
+
+  deploy:
+    name: Deploy to AWS
+    needs: check
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      # Uses the OIDC role if AWS_DEPLOY_ROLE_ARN is set, otherwise the access keys.
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - run: sam build
+
+      - name: sam deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
+          CONNECT_API_KEY: ${{ secrets.CONNECT_API_KEY }}
+        run: |
+          for v in DATABASE_URL JWT_SECRET CORS_ORIGIN; do
+            if [ -z "${!v}" ]; then echo "::error::Repository secret $v is not set"; exit 1; fi
+          done
+          overrides=("DatabaseUrl=$DATABASE_URL" "JwtSecret=$JWT_SECRET" "CorsOrigin=$CORS_ORIGIN")
+          if [ -n "$CONNECT_API_KEY" ]; then overrides+=("ConnectApiKey=$CONNECT_API_KEY"); fi
+          sam deploy --no-progressbar --parameter-overrides "${overrides[@]}"
+
+      - name: Smoke test
+        run: |
+          API_URL=$(aws cloudformation describe-stacks --stack-name erp-crm-api \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          echo "API URL: $API_URL"
+          echo "### Deployed API: $API_URL" >> "$GITHUB_STEP_SUMMARY"
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 "$API_URL/health"

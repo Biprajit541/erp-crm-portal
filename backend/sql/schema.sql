@@ -90,3 +90,5 @@ CREATE INDEX IF NOT EXISTS idx_customers_name   ON customers (LOWER(customer_nam
 CREATE INDEX IF NOT EXISTS idx_products_sku     ON products (LOWER(sku));
 CREATE INDEX IF NOT EXISTS idx_movements_product ON stock_movements (product_id);
 CREATE INDEX IF NOT EXISTS idx_challans_customer ON challans (customer_id);
+-- Caller lookup by phone number (Amazon Connect integration)
+CREATE INDEX IF NOT EXISTS idx_customers_mobile ON customers (mobile);

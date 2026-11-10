@@ -1,0 +1,12 @@
+{
+  "Name": "ContactFlowEvent",
+  "Details": {
+    "ContactData": {
+      "Channel": "VOICE",
+      "ContactId": "3f2a8c1e-1b2c-4d5e-8f90-123456789abc",
+      "InitiationMethod": "INBOUND",
+      "CustomerEndpoint": { "Address": "+919876543210", "Type": "TELEPHONE_NUMBER" }
+    },
+    "Parameters": {"action":"logCall","outcome":"TRANSFERRED_TO_AGENT","menuPath":"Main>Agent"}
+  }
+}

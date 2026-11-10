@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  ERP + CRM Portal API on AWS Lambda + API Gateway (HTTP API).
+  The Express app in src/app.ts runs unchanged through src/lambda.ts.
+  The database stays on Supabase PostgreSQL.
+
+Parameters:
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: Supabase TRANSACTION POOLER connection string (port 6543)
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    Description: Secret used to sign login tokens (same value as on Render keeps users logged in across both)
+  CorsOrigin:
+    Type: String
+    Default: http://localhost:5173
+    Description: Allowed frontend origin(s), comma separated, e.g. https://your-app.vercel.app
+  ConnectApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Optional shared secret for the /integrations/connect contact-center endpoints
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    MemorySize: 512
+    # API Gateway HTTP APIs give up after 30 seconds, so stay under that.
+    Timeout: 15
+
+Resources:
+  ErpApiFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      # Built by the Makefile: compile TypeScript, then install production
+      # dependencies only. Not bundled with esbuild, because pdfkit and
+      # swagger-ui-express read their font and asset files from node_modules.
+      BuildMethod: makefile
+    Properties:
+      CodeUri: .
+      Handler: dist/lambda.handler
+      Description: ERP + CRM Express API
+      Environment:
+        Variables:
+          NODE_ENV: production
+          DATABASE_URL: !Ref DatabaseUrl
+          JWT_SECRET: !Ref JwtSecret
+          JWT_EXPIRES_IN: 1d
+          CORS_ORIGIN: !Ref CorsOrigin
+          CONNECT_API_KEY: !Ref ConnectApiKey
+          DB_POOL_MAX: "2"
+      LoggingConfig:
+        LogGroup: !Ref ErpApiLogGroup
+      Events:
+        AllRoutes:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ErpHttpApi
+            Path: /{proxy+}
+            Method: ANY
+        Root:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ErpHttpApi
+            Path: /
+            Method: ANY
+
+  ErpHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # CORS is handled by the Express app itself (same rules as on Render).
+      # Throttling caps how many requests can reach Lambda, which also caps cost.
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 20
+
+  # Keep logs for two weeks instead of forever, so log storage never costs much.
+  ErpApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the API. Use it as VITE_API_URL on Vercel.
+    Value: !Sub https://${ErpHttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  FunctionName:
+    Description: Lambda function name (for CloudWatch logs)
+    Value: !Ref ErpApiFunction

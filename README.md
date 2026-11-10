@@ -2,6 +2,10 @@
 
 A small ERP/CRM system for a wholesale/distribution company, covering customers (CRM), products and stock, and sales challans, used by internal Sales, Warehouse, Accounts and Admin teams.
 
+The API runs on **AWS Lambda + API Gateway**, defined with **AWS SAM** and deployed by **GitHub Actions** (see [`backend/aws/README.md`](backend/aws/README.md)). The same code also runs as a normal server on Render.
+
+It also includes contact-center integration endpoints and an IVR Lambda (see [`contact-center/README.md`](contact-center/README.md)).
+
 ## Live URLs
 
 - **Frontend (Vercel):** http://erp-crm-portal-umber.vercel.app
@@ -17,7 +21,9 @@ A small ERP/CRM system for a wholesale/distribution company, covering customers 
 | Frontend  | React 18, TypeScript, Vite, React Router, Axios, plain responsive CSS |
 | Database  | PostgreSQL (Supabase) |
 | Docs      | Swagger UI (OpenAPI 3), Postman collection |
-| Hosting   | Vercel (frontend), Render (backend), Supabase (database) |
+| Hosting   | Vercel (frontend), AWS Lambda + API Gateway (backend; Render as fallback), Supabase (database) |
+| Cloud / DevOps | AWS SAM (infrastructure as code), GitHub Actions CI/CD, CloudWatch Logs |
+| Contact center | IVR integration endpoints (API-key auth) + Amazon Connect Lambda (not deployed, see contact-center/README.md) |
 
 ## Bonus features implemented
 
@@ -39,10 +45,18 @@ All accounts use password **`Password@123`**
 
 ```
 erp-crm-portal/
+├── .github/workflows/
+│   └── backend-aws.yml         # CI/CD: type-check, sam build, sam deploy, smoke test
 ├── backend/
+│   ├── template.yaml           # AWS SAM: Lambda, HTTP API, log group
+│   ├── Makefile                # How sam build packages the function
+│   ├── samconfig.toml          # Stack name + region
+│   ├── aws/                    # AWS deployment guide + IAM policies for GitHub
 │   ├── sql/schema.sql          # Full database schema
 │   ├── src/
-│   │   ├── index.ts            # Express app entry (+ Swagger at /docs)
+│   │   ├── app.ts              # Express app (routes, middleware, Swagger at /docs)
+│   │   ├── index.ts            # Server entry (local dev, Render)
+│   │   ├── lambda.ts           # AWS Lambda entry (serverless-http)
 │   │   ├── db.ts               # pg connection pool (SSL configurable)
 │   │   ├── openapi.ts          # OpenAPI 3 spec for Swagger UI
 │   │   ├── schemas.ts          # Zod validation schemas
@@ -58,7 +72,8 @@ erp-crm-portal/
 │   │       ├── customers.ts    # CRM module
 │   │       ├── products.ts     # Products + stock movements
 │   │       ├── challans.ts     # Sales challans + confirm logic + PDF
-│   │       └── dashboard.ts    # Summary counts
+│   │       ├── dashboard.ts    # Summary counts
+│   │       └── contactCenter.ts # Amazon Connect integration (API-key auth)
 │   └── .env.example
 ├── frontend/
 │   ├── src/
@@ -69,6 +84,9 @@ erp-crm-portal/
 │   │   └── pages/              # Login, Dashboard, Customers, CustomerDetail,
 │   │                           # Products, Challans, ChallanForm, ChallanDetail
 │   └── .env.example
+├── contact-center/
+│   ├── README.md               # Amazon Connect architecture, call flow, setup
+│   └── lambda/                 # Lambda handler + Connect test events
 ├── postman_collection.json
 └── README.md
 ```
@@ -118,6 +136,7 @@ Log in with `admin@erp.com` / `Password@123`.
 | `JWT_EXPIRES_IN` | Token lifetime, e.g. `1d` |
 | `CORS_ORIGIN` | Allowed frontend origin(s), comma separated |
 | `DB_SSL` | `true`/`false` to force SSL; auto-detected if unset |
+| `CONNECT_API_KEY` | Shared secret for the Amazon Connect Lambda; leave empty to disable `/integrations/connect` |
 
 ### Frontend (`frontend/.env`)
 | Variable | Description |
@@ -127,6 +146,8 @@ Log in with `admin@erp.com` / `Password@123`.
 Secrets are never committed — `.env` is gitignored; only `.env.example` templates are in the repo.
 
 ## Deployment
+
+> **AWS (primary):** see [`backend/aws/README.md`](backend/aws/README.md) for the Lambda + API Gateway setup with SAM and GitHub Actions. The Render steps below still work and serve as a fallback.
 
 ### Database — Supabase (free)
 Already done in "Running locally" step 1. Note the pooler connection string.
@@ -179,6 +200,9 @@ Already done in "Running locally" step 1. Note the pooler connection string.
 | PATCH | `/challans/:id/status` | SALES/ADMIN | Confirm/cancel a draft |
 | GET | `/challans/:id/pdf` | any | Download PDF invoice |
 | GET | `/dashboard/summary` | any | Dashboard counts |
+| GET | `/integrations/connect/customers/lookup` | API key | Identify caller by phone (IVR) |
+| GET | `/integrations/connect/challans/status` | API key | Order status for the calling number (IVR) |
+| POST | `/integrations/connect/call-log` | API key | Log the call in the CRM timeline |
 
 ## Architecture overview
 
@@ -190,7 +214,7 @@ The application is a layered **Express + TypeScript** backend exposing REST APIs
 - **Product snapshots:** `challan_items` stores each product's name, SKU and unit price at the moment of sale, so later price or name changes never alter historical challans.
 - **Challan numbers** are generated from a PostgreSQL sequence (`CH-YYYYMMDD-0001`), guaranteeing uniqueness under concurrency.
 - **Frontend:** a React SPA with an auth context; an Axios interceptor attaches the JWT to every request and auto-logs-out on 401. Search, filtering and pagination are all performed server-side.
-- **Deployment:** frontend on Vercel, backend on Render, database on Supabase.
+- **Deployment:** frontend on Vercel; backend on AWS Lambda behind an API Gateway HTTP API (SAM + GitHub Actions), with Render as a fallback running the same code; database on Supabase via its transaction pooler.
 
 ## Role permission matrix (enforced by API)
 

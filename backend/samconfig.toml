@@ -1,0 +1,13 @@
+# Default settings for `sam deploy`. Secrets are NOT stored here: pass them with
+# --parameter-overrides (GitHub Actions does this from repository secrets).
+version = 0.1
+
+[default.global.parameters]
+stack_name = "erp-crm-api"
+region = "ap-southeast-2"
+
+[default.deploy.parameters]
+resolve_s3 = true
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+fail_on_empty_changeset = false

@@ -22,10 +22,15 @@ export const openapiSpec = {
     { name: "Products", description: "Products, stock and movement log" },
     { name: "Challans", description: "Sales challans and PDF export" },
     { name: "Dashboard", description: "Summary counts" },
+    {
+      name: "Contact Center",
+      description: "Amazon Connect IVR integration, called by AWS Lambda. Uses the x-api-key header, not a JWT.",
+    },
   ],
   components: {
     securitySchemes: {
       bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      connectApiKey: { type: "apiKey", in: "header", name: "x-api-key" },
     },
     schemas: {
       LoginRequest: {
@@ -333,6 +338,69 @@ export const openapiSpec = {
         tags: ["Dashboard"],
         summary: "Get summary counts for the dashboard",
         responses: { "200": { description: "Counts" }, "401": { description: "Not authenticated" } },
+      },
+    },
+    "/integrations/connect/customers/lookup": {
+      get: {
+        tags: ["Contact Center"],
+        summary: "Identify a caller by phone number (start of every IVR call)",
+        security: [{ connectApiKey: [] }],
+        parameters: [
+          { name: "phone", in: "query", required: true, schema: { type: "string", example: "+919876543210" }, description: "E.164 or 10-digit mobile" },
+        ],
+        responses: {
+          "200": { description: "{ found: false } or the customer summary with challan counts and latest challan" },
+          "400": { description: "Invalid phone number" },
+          "401": { description: "Missing or invalid API key" },
+          "503": { description: "Integration not configured (CONNECT_API_KEY unset)" },
+        },
+      },
+    },
+    "/integrations/connect/challans/status": {
+      get: {
+        tags: ["Contact Center"],
+        summary: "Order status by challan digits; only returns challans owned by the calling number",
+        security: [{ connectApiKey: [] }],
+        parameters: [
+          { name: "phone", in: "query", required: true, schema: { type: "string", example: "+919876543210" } },
+          { name: "digits", in: "query", required: true, schema: { type: "string", example: "202607280001" }, description: "CH-20260728-0001 typed as digits" },
+        ],
+        responses: {
+          "200": { description: "{ found: false } or the challan status" },
+          "400": { description: "Invalid phone or digits" },
+          "401": { description: "Missing or invalid API key" },
+        },
+      },
+    },
+    "/integrations/connect/call-log": {
+      post: {
+        tags: ["Contact Center"],
+        summary: "Record the call in the customer's follow-up timeline (idempotent per contactId)",
+        security: [{ connectApiKey: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["phone", "contactId", "outcome"],
+                properties: {
+                  phone: { type: "string", example: "+919876543210" },
+                  contactId: { type: "string", example: "3f2a8c1e-1b2c-4d5e-8f90-123456789abc" },
+                  outcome: { type: "string", enum: ["SELF_SERVICE", "TRANSFERRED_TO_AGENT", "ABANDONED", "AGENT_HANDLED"] },
+                  menuPath: { type: "string", example: "Main>OrderStatus" },
+                  summary: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": { description: "Logged" },
+          "200": { description: "Duplicate contactId, ignored" },
+          "404": { description: "No customer with this phone number" },
+          "401": { description: "Missing or invalid API key" },
+        },
       },
     },
     "/health": {
