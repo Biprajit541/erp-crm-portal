@@ -68,15 +68,19 @@ export function buildInvoicePdf(data: InvoiceData, stream: NodeJS.WritableStream
 
   // ---- Items table ----
   const tableTop = metaTop + 78;
-  const cols = { item: 50, sku: 250, price: 340, qty: 420, total: 480 };
+  // Column x positions and widths. The amount columns are wide enough for
+  // totals up to Rs 99,99,999.00 on one line (they used to wrap above Rs 9,999).
+  const cols = { item: 50, sku: 215, price: 305, qty: 395, total: 435 };
+  const w = { item: 155, sku: 85, price: 85, qty: 35, total: 104 };
+  const oneLine = { lineBreak: false } as const;
 
   doc.fillColor(ACCENT).rect(50, tableTop, 495, 22).fill();
   doc.fillColor("#ffffff").fontSize(9).font("Helvetica-Bold");
   doc.text("PRODUCT", cols.item + 6, tableTop + 7);
   doc.text("SKU", cols.sku, tableTop + 7);
-  doc.text("PRICE", cols.price, tableTop + 7, { width: 70, align: "right" });
-  doc.text("QTY", cols.qty, tableTop + 7, { width: 40, align: "right" });
-  doc.text("TOTAL", cols.total, tableTop + 7, { width: 59, align: "right" });
+  doc.text("PRICE", cols.price, tableTop + 7, { width: w.price, align: "right" });
+  doc.text("QTY", cols.qty, tableTop + 7, { width: w.qty, align: "right" });
+  doc.text("TOTAL", cols.total, tableTop + 7, { width: w.total, align: "right" });
 
   let rowY = tableTop + 22;
   let grandTotal = 0;
@@ -91,12 +95,12 @@ export function buildInvoicePdf(data: InvoiceData, stream: NodeJS.WritableStream
       doc.fillColor("#f4f3ef").rect(50, rowY, 495, 20).fill();
     }
     doc.fillColor(INK);
-    doc.text(it.product_name, cols.item + 6, rowY + 6, { width: 190, ellipsis: true });
-    doc.fillColor(MUTED).text(it.sku, cols.sku, rowY + 6, { width: 85, ellipsis: true });
+    doc.text(it.product_name, cols.item + 6, rowY + 6, { width: w.item, ellipsis: true, ...oneLine });
+    doc.fillColor(MUTED).text(it.sku, cols.sku, rowY + 6, { width: w.sku, ellipsis: true, ...oneLine });
     doc.fillColor(INK);
-    doc.text(money(price), cols.price, rowY + 6, { width: 70, align: "right" });
-    doc.text(String(it.quantity), cols.qty, rowY + 6, { width: 40, align: "right" });
-    doc.text(money(lineTotal), cols.total, rowY + 6, { width: 59, align: "right" });
+    doc.text(money(price), cols.price, rowY + 6, { width: w.price, align: "right", ...oneLine });
+    doc.text(String(it.quantity), cols.qty, rowY + 6, { width: w.qty, align: "right", ...oneLine });
+    doc.text(money(lineTotal), cols.total, rowY + 6, { width: w.total - 6, align: "right", ...oneLine });
     rowY += 20;
   });
 
@@ -105,8 +109,8 @@ export function buildInvoicePdf(data: InvoiceData, stream: NodeJS.WritableStream
   // ---- Total ----
   rowY += 12;
   doc.fillColor(INK).fontSize(12).font("Helvetica-Bold");
-  doc.text("Grand Total", cols.price - 60, rowY, { width: 140, align: "right" });
-  doc.fillColor(ACCENT).text(money(grandTotal), cols.total, rowY, { width: 59, align: "right" });
+  doc.text("Grand Total", cols.price - 60, rowY, { width: w.price + 60 + w.qty, align: "right", ...oneLine });
+  doc.fillColor(ACCENT).text(money(grandTotal), cols.total, rowY, { width: w.total - 6, align: "right", ...oneLine });
 
   // ---- Footer ----
   const footY = 760;

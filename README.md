@@ -1,28 +1,82 @@
 # Mini ERP + CRM Operations Portal
 
+[![Backend - AWS Lambda](https://github.com/Biprajit541/erp-crm-portal/actions/workflows/backend-aws.yml/badge.svg)](https://github.com/Biprajit541/erp-crm-portal/actions/workflows/backend-aws.yml)
+
 A small ERP/CRM system for a wholesale/distribution company, covering customers (CRM), products and stock, and sales challans, used by internal Sales, Warehouse, Accounts and Admin teams.
 
-The API runs on **AWS Lambda + API Gateway**, defined with **AWS SAM** and deployed by **GitHub Actions** (see [`backend/aws/README.md`](backend/aws/README.md)). The same code also runs as a normal server on Render.
-
-It also includes contact-center integration endpoints and an IVR Lambda (see [`contact-center/README.md`](contact-center/README.md)).
+**Deployed on AWS:** the REST API runs serverless on **AWS Lambda** behind an **Amazon API Gateway HTTP API**, defined as infrastructure as code with **AWS SAM** and deployed automatically by a **GitHub Actions** CI/CD pipeline, with logs in **Amazon CloudWatch**. The React frontend is on Vercel and the PostgreSQL database on Supabase. Full setup: [`backend/aws/README.md`](backend/aws/README.md).
 
 ## Live URLs
 
-- **Frontend (Vercel):** http://erp-crm-portal-umber.vercel.app
-- **Backend API (Render):** https://erp-crm-portal-va0y.onrender.com
-- **Interactive API docs (Swagger):** https://erp-crm-portal-va0y.onrender.com/docs
-- **Database:** Supabase (PostgreSQL)
+| | URL |
+|---|---|
+| **Live app** (Vercel) | https://erp-crm-portal-umber.vercel.app |
+| **Backend API** (AWS Lambda + API Gateway, `ap-southeast-2`) | https://m1i2sfol4m.execute-api.ap-southeast-2.amazonaws.com |
+| **Interactive API docs** (Swagger) | https://m1i2sfol4m.execute-api.ap-southeast-2.amazonaws.com/docs |
+| **Health check** | https://m1i2sfol4m.execute-api.ap-southeast-2.amazonaws.com/health |
+| Fallback API (Render, same code) | https://erp-crm-portal-va0y.onrender.com |
+| Database | Supabase PostgreSQL (transaction pooler) |
+
+## Screenshots
+
+> Captured from the running app with sample data. Log in at the live app with any test account below to try it.
+
+| Dashboard | Customers (CRM) |
+|---|---|
+| ![Dashboard with customer, product, low-stock and challan counts](docs/screenshots/dashboard.png) | ![Customer list with search, status and type filters](docs/screenshots/customers.png) |
+| **Customer detail and follow-up notes** | **Products and stock (low-stock alerts)** |
+| ![Customer detail page with follow-up timeline](docs/screenshots/customer-detail.png) | ![Product list with stock levels, LOW badges and stock in/out actions](docs/screenshots/products.png) |
+| **Sales challans** | **Creating a challan: stock is checked before confirming** |
+| ![Challan list with draft and confirmed challans](docs/screenshots/challans.png) | ![Challan form rejecting a quantity larger than available stock](docs/screenshots/challan-form.png) |
+| **Challan detail (price snapshot)** | **Downloadable PDF challan** |
+| ![Challan detail with line items and total value](docs/screenshots/challan-detail.png) | ![Generated PDF delivery challan](docs/screenshots/challan-pdf.png) |
+
+<details>
+<summary>Login page</summary>
+
+![Login page with test accounts](docs/screenshots/login.png)
+</details>
+
+## AWS architecture
+
+```
+Browser ── React SPA (Vercel)
+   │  HTTPS + JWT
+   ▼
+Amazon API Gateway (HTTP API) ── throttled: 20 req/s, burst 50
+   │
+   ▼
+AWS Lambda (Node.js 22, arm64) ── Express app via serverless-http
+   │  pg pool, max 2 connections per instance
+   ▼
+Supabase PostgreSQL (transaction pooler, port 6543)
+
+Amazon CloudWatch Logs ── 14-day retention
+GitHub Actions ── type-check → build → sam deploy → /health smoke test
+```
+
+| Concern | How it's handled |
+|---------|------------------|
+| **Infrastructure as code** | `backend/template.yaml` (AWS SAM) defines the Lambda function, HTTP API, throttling and log group; every deploy is a CloudFormation change set |
+| **CI/CD** | `.github/workflows/backend-aws.yml`: every PR is type-checked, built and its template validated; every push to `main` deploys and smoke-tests `/health` |
+| **Least-privilege access** | GitHub deploys with a dedicated IAM user whose policy (`backend/aws/github-deploy-policy.json`) can only manage this stack's Lambda, API, logs and role. An OIDC role setup is also included for accounts that support it |
+| **Secrets** | Database URL and JWT secret are GitHub encrypted secrets, passed to CloudFormation as `NoEcho` parameters; nothing secret is in the repo |
+| **Serverless database connections** | Supabase transaction pooler + a small per-instance pool, so many concurrent Lambdas don't exhaust Postgres connections |
+| **Binary responses** | PDF challans are base64-encoded for API Gateway so downloads aren't corrupted |
+| **Cost control** | API Gateway throttling caps traffic; logs expire after 14 days; pay-per-request pricing |
+| **Portability** | The same Express app runs on Lambda (`src/lambda.ts`) and as a normal server (`src/index.ts`) for local dev and the Render fallback |
 
 ## Tech stack
 
 | Layer     | Technology |
 |-----------|------------|
-| Backend   | Node.js, TypeScript, Express.js, PostgreSQL (`pg`), Zod validation, JWT auth, bcrypt |
+| Backend   | Node.js, TypeScript, Express.js, PostgreSQL (`pg`), Zod validation, JWT auth, bcryptjs |
 | Frontend  | React 18, TypeScript, Vite, React Router, Axios, plain responsive CSS |
 | Database  | PostgreSQL (Supabase) |
 | Docs      | Swagger UI (OpenAPI 3), Postman collection |
-| Hosting   | Vercel (frontend), AWS Lambda + API Gateway (backend; Render as fallback), Supabase (database) |
-| Cloud / DevOps | AWS SAM (infrastructure as code), GitHub Actions CI/CD, CloudWatch Logs |
+| Cloud (AWS) | AWS Lambda, Amazon API Gateway (HTTP API), AWS SAM / CloudFormation, Amazon CloudWatch Logs, IAM, S3 (deployment artifacts) |
+| CI/CD     | GitHub Actions |
+| Hosting   | Backend: AWS Lambda (Render as fallback) · Frontend: Vercel · Database: Supabase |
 | Contact center | IVR integration endpoints (API-key auth) + Amazon Connect Lambda (not deployed, see contact-center/README.md) |
 
 ## Bonus features implemented
@@ -73,7 +127,7 @@ erp-crm-portal/
 │   │       ├── products.ts     # Products + stock movements
 │   │       ├── challans.ts     # Sales challans + confirm logic + PDF
 │   │       ├── dashboard.ts    # Summary counts
-│   │       └── contactCenter.ts # Amazon Connect integration (API-key auth)
+│   │       └── contactCenter.ts # Contact-center integration (API-key auth)
 │   └── .env.example
 ├── frontend/
 │   ├── src/
@@ -87,6 +141,7 @@ erp-crm-portal/
 ├── contact-center/
 │   ├── README.md               # Amazon Connect architecture, call flow, setup
 │   └── lambda/                 # Lambda handler + Connect test events
+├── docs/screenshots/           # README screenshots
 ├── postman_collection.json
 └── README.md
 ```
@@ -147,12 +202,22 @@ Secrets are never committed — `.env` is gitignored; only `.env.example` templa
 
 ## Deployment
 
-> **AWS (primary):** see [`backend/aws/README.md`](backend/aws/README.md) for the Lambda + API Gateway setup with SAM and GitHub Actions. The Render steps below still work and serve as a fallback.
+### Backend — AWS Lambda + API Gateway (primary)
+Deployed automatically by GitHub Actions on every push to `main`. One-time setup (IAM deploy user, GitHub secrets) is in [`backend/aws/README.md`](backend/aws/README.md). In short:
+
+1. Create an IAM policy from `backend/aws/github-deploy-policy.json` and a deploy-only IAM user with it.
+2. Add GitHub repository secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `DATABASE_URL` (Supabase transaction pooler, port 6543), `JWT_SECRET`, `CORS_ORIGIN` (the Vercel URL).
+3. Push to `main` or run the workflow manually. The run summary shows the API URL.
+4. Set `VITE_API_URL` on Vercel to that URL and redeploy the frontend.
+
+To deploy by hand instead: `cd backend && sam build && sam deploy --parameter-overrides DatabaseUrl=... JwtSecret=... CorsOrigin=...`
+
+The Render setup below still works and runs the same code as a fallback.
 
 ### Database — Supabase (free)
 Already done in "Running locally" step 1. Note the pooler connection string.
 
-### Backend — Render (free)
+### Backend — Render (fallback)
 1. Push the repo to GitHub.
 2. On https://render.com → **New → Web Service** → connect the repo.
 3. Settings:
@@ -170,12 +235,12 @@ Already done in "Running locally" step 1. Note the pooler connection string.
 2. Settings:
    - **Root Directory:** `frontend`
    - Framework preset: Vite (auto-detected)
-3. Environment variable: `VITE_API_URL=https://YOUR-API.onrender.com`
-4. Deploy, then copy the Vercel URL into the backend's `CORS_ORIGIN` on Render and redeploy the backend.
+3. Environment variable: `VITE_API_URL=` your AWS API Gateway URL (or the Render URL)
+4. Deploy, then put the Vercel URL in the backend's `CORS_ORIGIN` (GitHub secret for AWS, environment variable on Render) and redeploy the backend.
 
 ## API documentation
 
-- **Swagger UI (interactive):** `https://YOUR-API.onrender.com/docs` — authorize with a token from `POST /auth/login`, then call any protected endpoint from the browser. Raw spec at `/openapi.json`.
+- **Swagger UI (interactive):** https://m1i2sfol4m.execute-api.ap-southeast-2.amazonaws.com/docs — authorize with a token from `POST /auth/login`, then call any protected endpoint from the browser. Raw spec at `/openapi.json`.
 - **Postman collection:** `postman_collection.json` in the repo. Import it, set the `baseUrl` variable, run **Login** first (it auto-saves the token), then any request works.
 
 ### Main endpoints
@@ -210,11 +275,11 @@ The application is a layered **Express + TypeScript** backend exposing REST APIs
 
 - **Request pipeline:** each request flows through Zod validation → JWT authentication → role-based access middleware → parameterized SQL → a central error handler that maps failures to correct HTTP status codes (400 validation, 401 auth, 403 role, 404 not found, 409 conflict).
 - **Authentication & roles:** a JWT is issued at login and verified on every protected route by `authenticate`. A `requireRole()` guard enforces the four roles (Sales, Warehouse, Accounts, Admin); Admin bypasses all checks. Permissions are enforced on the server — the UI only hides controls for convenience.
-- **Transaction-safe stock:** confirming a challan runs inside a single PostgreSQL transaction using `SELECT ... FOR UPDATE` row locks. Stock can never go negative even under concurrent requests; insufficient stock returns HTTP 400 and the whole transaction rolls back (no partial writes). Every stock change — manual movement or challan confirmation — is written to a `stock_movements` audit log.
+- **Transaction-safe stock:** confirming a challan runs inside a single PostgreSQL transaction that locks product rows (`SELECT ... FOR NO KEY UPDATE`, in product-id order to avoid deadlocks). Stock can never go negative even under concurrent requests; insufficient stock returns HTTP 400 and the whole transaction rolls back (no partial writes). Every stock change — manual movement or challan confirmation — is written to a `stock_movements` audit log.
 - **Product snapshots:** `challan_items` stores each product's name, SKU and unit price at the moment of sale, so later price or name changes never alter historical challans.
 - **Challan numbers** are generated from a PostgreSQL sequence (`CH-YYYYMMDD-0001`), guaranteeing uniqueness under concurrency.
 - **Frontend:** a React SPA with an auth context; an Axios interceptor attaches the JWT to every request and auto-logs-out on 401. Search, filtering and pagination are all performed server-side.
-- **Deployment:** frontend on Vercel; backend on AWS Lambda behind an API Gateway HTTP API (SAM + GitHub Actions), with Render as a fallback running the same code; database on Supabase via its transaction pooler.
+- **Deployment:** backend on AWS Lambda behind an Amazon API Gateway HTTP API, provisioned with AWS SAM and deployed by GitHub Actions (see [AWS architecture](#aws-architecture)); frontend on Vercel; database on Supabase via its transaction pooler. Render runs the same code as a fallback.
 
 ## Role permission matrix (enforced by API)
 
@@ -233,4 +298,6 @@ The application is a layered **Express + TypeScript** backend exposing REST APIs
 - Single-warehouse stock model — `location` is an informational field, not a separate warehouse entity.
 - JWT is stored in `localStorage` for simplicity; an httpOnly cookie would be more secure for production.
 - The challan form's customer/product dropdowns load the first 50 records (no async search).
-- The backend runs on Render's free tier, which sleeps after ~15 minutes of inactivity, so the first request after idle has a cold-start delay of roughly 30–50 seconds.
+- The first request to a cold Lambda instance takes about 1–2 seconds longer while it starts (much less than Render's 30–50 second free-tier wake-up).
+- The Lambda runs in Sydney (`ap-southeast-2`) and the database in Mumbai (`ap-south-1`), which adds some latency per query; the AWS account's region is fixed. Co-locating them would remove it.
+- The Amazon Connect IVR in `contact-center/` was built and tested locally but not deployed, because Amazon Connect isn't available to AWS accounts registered in India.

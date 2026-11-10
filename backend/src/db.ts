@@ -1,7 +1,13 @@
-import { Pool, QueryResultRow } from "pg";
+import { Pool, QueryResultRow, types } from "pg";
 import dotenv from "dotenv";
 
 dotenv.config();
+
+// Return DATE columns (e.g. customers.follow_up_date) as plain "YYYY-MM-DD"
+// strings. By default pg turns them into a JS Date at the server's local
+// midnight, so on a machine ahead of UTC (like IST) the date came back one day
+// early, and saving the edit form then moved it back another day.
+types.setTypeParser(types.builtins.DATE, (value) => value);
 
 // Supabase requires SSL. Locally you can also connect to a plain Postgres.
 // DB_SSL=true/false forces it; if unset, SSL is on except for localhost.
